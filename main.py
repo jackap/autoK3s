@@ -85,6 +85,6 @@ if __name__ == "__main__":
     token = bootstrap_calico_master(config.ssh_key,config.master_ip,config.username)
 
     for worker in config.workers:
-        bootstrap_worker(config.ssh_key,worker,config.username,config.master_ip)
+        bootstrap_worker(config.ssh_key,worker,config.username,config.master_ip,token)
 
 
