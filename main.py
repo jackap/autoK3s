@@ -69,6 +69,30 @@ def bootstrap_worker(ssh_key,ip,username,master_ip,token):
     stdin.close()
     print(stdout.read().decode("utf-8"))
 
+
+def uninstall_worker(ssh_key,ip,username):
+    sshcon = start_ssh(ssh_key,ip,username)
+    print(f"Uninstalling worker @{ip}")
+    stdin, stdout, stderr = sshcon.exec_command(
+        f'/usr/local/bin/k3s-agent-uninstall.sh')
+    stdin.close()
+    print(stdout.read().decode("utf-8"))
+
+
+def uninstall_master(ssh_key,ip,username):
+    sshcon = start_ssh(ssh_key,ip,username)
+    print(f"Uninstalling master @{ip}")
+    stdin, stdout, stderr = sshcon.exec_command(
+        f'/usr/local/bin/k3s-uninstall.sh')
+    stdin.close()
+    print(stdout.read().decode("utf-8"))
+
+
+def uninstall(config: Config):
+    for worker in config.workers:
+        uninstall_worker(config.ssh_key,worker,config.username)
+    uninstall_master(config.ssh_key,config.master_ip,config.username)
+
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: python script.py <config_file>")
@@ -82,6 +106,11 @@ if __name__ == "__main__":
     except ValidationError as e:
         print(f"Error: Invalid configuration - {e}")
 
+    try:
+        uninstall(config)
+    except:
+        pass
+    
     token = bootstrap_calico_master(config.ssh_key,config.master_ip,config.username)
 
     for worker in config.workers:
