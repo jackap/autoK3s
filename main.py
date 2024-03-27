@@ -1,0 +1,90 @@
+from pydantic import BaseModel, IPvAnyAddress, StringConstraints, constr, ValidationError
+from typing import Annotated, List
+import yaml
+import sys
+import paramiko
+import os
+
+def start_ssh(ssh_key,ip,username) -> paramiko.SSHClient:
+    basepath = os.path.expanduser("~")
+    sshcon = paramiko.SSHClient()  # will create the object
+    sshcon.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # no known_hosts error
+    sshcon.connect(str(ip), username=username, key_filename=basepath + ssh_key)  # no passwd needed
+    return sshcon
+
+class Config(BaseModel):
+    ssh_key: str
+    username: str
+    master_ip: IPvAnyAddress
+    workers: List[IPvAnyAddress]
+    cni: Annotated[str, StringConstraints(min_length=1)]
+
+def read_config_file(file_path):
+    with open(file_path, 'r') as file:
+        config_data = yaml.safe_load(file)
+    return config_data
+
+def get_necessary_files(sshcon: paramiko.SSHClient,master_ip):
+    print("Copy Kubernetes configuration")
+    stdin, stdout, stderr = sshcon.exec_command(
+        'sudo cat /etc/rancher/k3s/k3s.yaml')
+    stdin.close()
+    conf = stdout.read().decode("utf-8").replace("127.0.0.1",str(master_ip))
+    with open("./k3s.yaml",'w') as fp:
+        fp.write(conf)
+        fp.close()
+
+    print("Get node token")
+    stdin, stdout, stderr = sshcon.exec_command(
+        'sudo cat /var/lib/rancher/k3s/server/node-token')
+    stdin.close()
+    token = stdout.read().decode("utf-8")[:-1]
+    return token
+
+def bootstrap_calico_master(ssh_key,master_ip,username) -> str:
+    sshcon = start_ssh(ssh_key,master_ip,username)
+
+    print("Installing K3s on master node")
+    stdin, stdout, stderr = sshcon.exec_command(
+        'curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--flannel-backend=none --disable-network-policy --cluster-cidr=10.10.0.0/16" sh -')
+    stdin.close()
+    print(stdout.read().decode("utf-8"))
+    print("Installing calico")
+    stdin, stdout, stderr = sshcon.exec_command(
+        'kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/tigera-operator.yaml')
+    stdin.close()
+    print(stdout.read().decode("utf-8"))
+    stdin, stdout, stderr = sshcon.exec_command(
+        'kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/custom-resources.yaml')
+    stdin.close()
+    print(stdout.read().decode("utf-8"))
+    return get_necessary_files(sshcon,master_ip)
+    
+
+def bootstrap_worker(ssh_key,ip,username,master_ip,token):
+    sshcon = start_ssh(ssh_key,ip,username)
+    print(f"Bootstrap worker @{ip}")
+    stdin, stdout, stderr = sshcon.exec_command(
+        f'curl -sfL https://get.k3s.io | K3S_URL=https://{master_ip}:6443 K3S_TOKEN={token} sh -')
+    stdin.close()
+    print(stdout.read().decode("utf-8"))
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("Usage: python script.py <config_file>")
+        sys.exit(1)
+
+    config_file = sys.argv[1]
+    config_data = read_config_file(config_file)
+
+    try:
+        config = Config(**config_data)
+    except ValidationError as e:
+        print(f"Error: Invalid configuration - {e}")
+
+    token = bootstrap_calico_master(config.ssh_key,config.master_ip,config.username)
+
+    for worker in config.workers:
+        bootstrap_worker(config.ssh_key,worker,config.username,config.master_ip)
+
+
