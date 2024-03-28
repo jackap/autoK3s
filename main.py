@@ -4,6 +4,7 @@ import yaml
 import sys
 import paramiko
 import os
+import subprocess
 
 def start_ssh(ssh_key,ip,username) -> paramiko.SSHClient:
     basepath = os.path.expanduser("~")
@@ -41,7 +42,7 @@ def get_necessary_files(sshcon: paramiko.SSHClient,master_ip):
     token = stdout.read().decode("utf-8")[:-1]
     return token
 
-def bootstrap_calico_master(ssh_key,master_ip,username) -> str:
+def bootstrap_master(ssh_key,master_ip,username) -> str:
     sshcon = start_ssh(ssh_key,master_ip,username)
 
     print("Installing K3s on master node")
@@ -49,15 +50,7 @@ def bootstrap_calico_master(ssh_key,master_ip,username) -> str:
         'curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--flannel-backend=none --disable-network-policy --cluster-cidr=10.10.0.0/16" sh -')
     stdin.close()
     print(stdout.read().decode("utf-8"))
-    print("Installing calico")
-    stdin, stdout, stderr = sshcon.exec_command(
-        'kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/tigera-operator.yaml')
-    stdin.close()
-    print(stdout.read().decode("utf-8"))
-    stdin, stdout, stderr = sshcon.exec_command(
-        'kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/custom-resources.yaml')
-    stdin.close()
-    print(stdout.read().decode("utf-8"))
+   
     return get_necessary_files(sshcon,master_ip)
     
 
@@ -111,9 +104,13 @@ if __name__ == "__main__":
     except:
         pass
     
-    token = bootstrap_calico_master(config.ssh_key,config.master_ip,config.username)
+    token = bootstrap_master(config.ssh_key,config.master_ip,config.username)
 
     for worker in config.workers:
         bootstrap_worker(config.ssh_key,worker,config.username,config.master_ip,token)
 
-
+    print("Installing calico")
+    subprocess.run('kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/tigera-operator.yaml',
+    shell=True,check=True, text=True)
+    subprocess.run('kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/custom-resources.yaml',
+    shell=True,check=True, text=True)
