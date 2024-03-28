@@ -47,7 +47,7 @@ def bootstrap_master(ssh_key,master_ip,username) -> str:
 
     print("Installing K3s on master node")
     stdin, stdout, stderr = sshcon.exec_command(
-        'curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--flannel-backend=none --disable-network-policy --cluster-cidr=10.10.0.0/16" sh -')
+        'curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--flannel-backend=none --disable-network-policy --cluster-cidr=10.42.0.0/16 --service-cidr=10.43.0.0/16" sh -')
     stdin.close()
     print(stdout.read().decode("utf-8"))
    
@@ -112,5 +112,5 @@ if __name__ == "__main__":
     print("Installing calico")
     subprocess.run('KUBECONFIG=./k3s.yaml kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/tigera-operator.yaml',
     shell=True,check=True, text=True)
-    subprocess.run('KUBECONFIG=./k3s.yaml kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/custom-resources.yaml',
+    subprocess.run('KUBECONFIG=./k3s.yaml kubectl create -f ./calico_config.yml',
     shell=True,check=True, text=True)

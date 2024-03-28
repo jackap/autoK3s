@@ -1,6 +1,5 @@
 # Ignore YAML files
 *.yaml
-*.yml
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
