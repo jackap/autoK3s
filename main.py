@@ -110,7 +110,7 @@ if __name__ == "__main__":
         bootstrap_worker(config.ssh_key,worker,config.username,config.master_ip,token)
 
     print("Installing calico")
-    subprocess.run('kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/tigera-operator.yaml',
+    subprocess.run('KUBECONFIG=./k3s.yaml kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/tigera-operator.yaml',
     shell=True,check=True, text=True)
-    subprocess.run('kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/custom-resources.yaml',
+    subprocess.run('KUBECONFIG=./k3s.yaml kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/custom-resources.yaml',
     shell=True,check=True, text=True)
