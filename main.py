@@ -47,7 +47,7 @@ def bootstrap_master(ssh_key,master_ip,username) -> str:
 
     print("Installing K3s on master node")
     stdin, stdout, stderr = sshcon.exec_command(
-        'curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--flannel-backend=none --disable-network-policy --cluster-cidr=10.42.0.0/16 --service-cidr=10.43.0.0/16" sh -')
+        'curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--flannel-backend=none --disable-network-policy --disable=traefik --cluster-cidr=192.168.0.0/16" sh -')
     stdin.close()
     print(stdout.read().decode("utf-8"))
    
