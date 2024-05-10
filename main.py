@@ -46,12 +46,12 @@ def get_necessary_files(sshcon: paramiko.SSHClient,master_ip):
     return token
 
 
-def bootstrap_master(ssh_key,master_ip,username) -> str:
+def bootstrap_master(ssh_key,master_ip,username,with_default_cni=False) -> str:
     sshcon = start_ssh(ssh_key,master_ip,username)
-
+    opts = "--flannel-backend=none --disable-network-policy --disable=traefik " if with_default_cni else ""
     print("Installing K3s on master node")
     stdin, stdout, stderr = sshcon.exec_command(
-        'curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--flannel-backend=none --disable-network-policy --disable=traefik --cluster-cidr=192.168.0.0/16" sh -')
+        f'curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="{opts}--cluster-cidr=192.168.0.0/16" sh -')
     stdin.close()
     print(stdout.read().decode("utf-8"))
    
@@ -90,6 +90,10 @@ def uninstall(config: Config):
         uninstall_worker(config.ssh_key,worker,config.username)
     uninstall_master(config.ssh_key,config.master_ip,config.username)
 
+def install_with_default(config: Config):
+    token = bootstrap_master(config.ssh_key,config.master_ip,config.username,True)
+    for worker in config.workers:
+        bootstrap_worker(config.ssh_key,worker,config.username,config.master_ip,token)
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
@@ -109,6 +113,11 @@ if __name__ == "__main__":
     except:
         pass
     
+    if config.cni == "default":
+        print("Install with default K3s configuration")
+        install_with_default(config)
+        exit(0)
+
     token = bootstrap_master(config.ssh_key,config.master_ip,config.username)
 
     for worker in config.workers:
@@ -120,3 +129,15 @@ if __name__ == "__main__":
         shell=True,check=True, text=True)
         subprocess.run('KUBECONFIG=./k3s.yaml kubectl create -f ./calico_config.yml',
         shell=True,check=True, text=True)
+
+    elif config.cni == "canal":
+        print("Installing canal")
+        subprocess.run('KUBECONFIG=./k3s.yaml kubectl create -f ./canal.yml',
+        shell=True,check=True, text=True)
+
+    elif config.cni == "cilium":
+        print("Installing cilium: requires cilium-cli to be available")
+        print("Warning: currently disabling kube-proxy is not supported")
+        subprocess.run('KUBECONFIG=./k3s.yaml cilium install --version 1.15.4 --set=ipam.operator.clusterPoolIPv4PodCIDRList="192.168.0.0/16"',
+        shell=True,check=True, text=True)
+        
