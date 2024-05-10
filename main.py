@@ -46,6 +46,20 @@ def get_necessary_files(sshcon: paramiko.SSHClient,master_ip):
     return token
 
 
+
+def bootstrap_cilium_master(ssh_key,master_ip,username,) -> str:
+    sshcon = start_ssh(ssh_key,master_ip,username)
+    opts = "--flannel-backend=none --disable-network-policy "
+    print("Installing K3s on master node")
+    stdin, stdout, stderr = sshcon.exec_command(
+        f'curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="{opts}--cluster-cidr=192.168.0.0/16" sh -')
+    stdin.close()
+    print(stdout.read().decode("utf-8"))
+   
+    return get_necessary_files(sshcon,master_ip)
+
+
+
 def bootstrap_master(ssh_key,master_ip,username,with_default_cni=False) -> str:
     sshcon = start_ssh(ssh_key,master_ip,username)
     opts = "--flannel-backend=none --disable-network-policy --disable=traefik " if with_default_cni else ""
@@ -117,27 +131,35 @@ if __name__ == "__main__":
         print("Install with default K3s configuration")
         install_with_default(config)
         exit(0)
+ 
 
-    token = bootstrap_master(config.ssh_key,config.master_ip,config.username)
+    elif config.cni == "calico":
+        token = bootstrap_master(config.ssh_key,config.master_ip,config.username)
 
-    for worker in config.workers:
-        bootstrap_worker(config.ssh_key,worker,config.username,config.master_ip,token)
-
-    if config.cni == "calico":
+        for worker in config.workers:
+            bootstrap_worker(config.ssh_key,worker,config.username,config.master_ip,token)
         print("Installing calico")
         subprocess.run('KUBECONFIG=./k3s.yaml kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/tigera-operator.yaml',
         shell=True,check=True, text=True)
         subprocess.run('KUBECONFIG=./k3s.yaml kubectl create -f ./calico_config.yml',
         shell=True,check=True, text=True)
-
+        exit(0)
     elif config.cni == "canal":
+        token = bootstrap_master(config.ssh_key,config.master_ip,config.username)
+
+        for worker in config.workers:
+            bootstrap_worker(config.ssh_key,worker,config.username,config.master_ip,token)
         print("Installing canal")
         subprocess.run('KUBECONFIG=./k3s.yaml kubectl create -f ./canal.yml',
         shell=True,check=True, text=True)
-
+        exit(0)
     elif config.cni == "cilium":
+        token = bootstrap_cilium_master(config.ssh_key,config.master_ip,config.username)
+
+        for worker in config.workers:
+            bootstrap_worker(config.ssh_key,worker,config.username,config.master_ip,token)
         print("Installing cilium: requires cilium-cli to be available")
         print("Warning: currently disabling kube-proxy is not supported")
         subprocess.run('KUBECONFIG=./k3s.yaml cilium install --version 1.15.4 --set=ipam.operator.clusterPoolIPv4PodCIDRList="192.168.0.0/16"',
         shell=True,check=True, text=True)
-        
+        exit(0)
