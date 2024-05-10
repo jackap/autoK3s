@@ -13,6 +13,7 @@ def start_ssh(ssh_key,ip,username) -> paramiko.SSHClient:
     sshcon.connect(str(ip), username=username, key_filename=basepath + ssh_key)  # no passwd needed
     return sshcon
 
+
 class Config(BaseModel):
     ssh_key: str
     username: str
@@ -20,10 +21,12 @@ class Config(BaseModel):
     workers: List[IPvAnyAddress]
     cni: Annotated[str, StringConstraints(min_length=1)]
 
+
 def read_config_file(file_path):
     with open(file_path, 'r') as file:
         config_data = yaml.safe_load(file)
     return config_data
+
 
 def get_necessary_files(sshcon: paramiko.SSHClient,master_ip):
     print("Copy Kubernetes configuration")
@@ -42,6 +45,7 @@ def get_necessary_files(sshcon: paramiko.SSHClient,master_ip):
     token = stdout.read().decode("utf-8")[:-1]
     return token
 
+
 def bootstrap_master(ssh_key,master_ip,username) -> str:
     sshcon = start_ssh(ssh_key,master_ip,username)
 
@@ -52,7 +56,7 @@ def bootstrap_master(ssh_key,master_ip,username) -> str:
     print(stdout.read().decode("utf-8"))
    
     return get_necessary_files(sshcon,master_ip)
-    
+
 
 def bootstrap_worker(ssh_key,ip,username,master_ip,token):
     sshcon = start_ssh(ssh_key,ip,username)
@@ -86,6 +90,7 @@ def uninstall(config: Config):
         uninstall_worker(config.ssh_key,worker,config.username)
     uninstall_master(config.ssh_key,config.master_ip,config.username)
 
+
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: python script.py <config_file>")
@@ -109,8 +114,9 @@ if __name__ == "__main__":
     for worker in config.workers:
         bootstrap_worker(config.ssh_key,worker,config.username,config.master_ip,token)
 
-    print("Installing calico")
-    subprocess.run('KUBECONFIG=./k3s.yaml kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/tigera-operator.yaml',
-    shell=True,check=True, text=True)
-    subprocess.run('KUBECONFIG=./k3s.yaml kubectl create -f ./calico_config.yml',
-    shell=True,check=True, text=True)
+    if config.cni == "calico":
+        print("Installing calico")
+        subprocess.run('KUBECONFIG=./k3s.yaml kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/tigera-operator.yaml',
+        shell=True,check=True, text=True)
+        subprocess.run('KUBECONFIG=./k3s.yaml kubectl create -f ./calico_config.yml',
+        shell=True,check=True, text=True)
