@@ -62,7 +62,7 @@ def bootstrap_cilium_master(ssh_key,master_ip,username,) -> str:
 
 def bootstrap_master(ssh_key,master_ip,username,with_default_cni=False) -> str:
     sshcon = start_ssh(ssh_key,master_ip,username)
-    opts = "--flannel-backend=none --disable-network-policy --disable=traefik " if with_default_cni else ""
+    opts = "--flannel-backend=none --disable-network-policy --disable=traefik " if not with_default_cni else ""
     print("Installing K3s on master node")
     stdin, stdout, stderr = sshcon.exec_command(
         f'curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="{opts}--cluster-cidr=192.168.0.0/16" sh -')
